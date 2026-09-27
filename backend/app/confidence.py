@@ -31,19 +31,45 @@ exists. python2to3 can reach safe_to_merge when both signals agree.
 from typing import Optional
 
 
-def derive_confidence(model_confidence: Optional[str], dry_run: dict) -> tuple[str, str]:
+def derive_confidence(
+    model_confidence: Optional[str],
+    dry_run: dict,
+) -> tuple[str, str]:
     """
-    model_confidence: the LLM's own self-reported "confidence" field
-                       ("safe_to_merge" / "needs_human_review" / anything else)
-    dry_run:           dict with "attempted" (bool) and "passed" (bool | None),
-                        as produced by dry_run.run_python_tests_dry_run() or
-                        the not-implemented stub for other recipes.
+    Derive the final confidence status from the model confidence
+    and deterministic dry-run verification.
 
-    Returns (confidence, confidence_reason).
+    Args:
+        model_confidence:
+            The LLM's self-reported confidence field.
+
+            Expected values:
+            - "safe_to_merge"
+            - "needs_human_review"
+
+            Any other value is treated conservatively.
+
+        dry_run:
+            Dictionary produced by the dry-run verification layer.
+
+            Expected structure:
+            {
+                "attempted": bool,
+                "passed": bool | None
+            }
+
+    Returns:
+        tuple[str, str]:
+            (
+                confidence,
+                confidence_reason
+            )
     """
+
     attempted = dry_run.get("attempted", False)
     passed = dry_run.get("passed")
 
+    # No deterministic verification was performed.
     if not attempted:
         return (
             "needs_human_review",
@@ -51,19 +77,36 @@ def derive_confidence(model_confidence: Optional[str], dry_run: dict) -> tuple[s
             "so this result can't be independently confirmed.",
         )
 
+    # A dry-run must explicitly return True.
+    #
+    # False means tests failed.
+    # None means the result is unknown / incomplete.
+    #
+    # Neither case is sufficient for automatic approval.
     if passed is False:
         return (
             "needs_human_review",
             "The generated tests failed during dry-run execution.",
         )
 
+    if passed is not True:
+        return (
+            "needs_human_review",
+            "Dry-run verification did not produce a confirmed passing result.",
+        )
+
+    # Even when deterministic verification succeeds,
+    # the model must also consider the migration safe.
     if model_confidence != "safe_to_merge":
         return (
             "needs_human_review",
             "The model itself flagged this change as needing review.",
         )
 
-    # Both signals agree: dry-run passed AND the model self-reports safe.
+    # Both independent signals agree:
+    #
+    # 1. dry-run executed and passed
+    # 2. model explicitly reported safe_to_merge
     return (
         "safe_to_merge",
         "Dry-run tests passed and the model reported no complex logical "
