@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMigrationForm, type SubmitResult } from './hooks/useMigrationForm';
 import { InputScreen } from './components/input/InputScreen';
 import { FileResultView } from './components/FileResultView';
+import { RoadmapView } from './components/RoadmapView';
 import { migrationRoadmap, ApiError } from './api/client';
-import { indexDependencies, type DependencyIndex } from './data/dependencyIndex';
-import type { MigrationRoadmapResponse, RecipeId } from './types/migration';
+import type { MigrationRoadmapResponse, RecipeId, RoadmapEntry } from './types/migration';
 
-type Panel = 'results' | 'dependencies';
+type Panel = 'results' | 'roadmap';
 
 export function App() {
   const [result, setResult] = useState<SubmitResult | null>(null);
@@ -14,33 +14,39 @@ export function App() {
 
   const [panel, setPanel] = useState<Panel>('results');
   const [selected, setSelected] = useState<string | null>(null);
-  const [deps, setDeps] = useState<DependencyIndex>({});
-  const [depError, setDepError] = useState<string | null>(null);
-  const [loadingDeps, setLoadingDeps] = useState(false);
+  const [roadmap, setRoadmap] = useState<RoadmapEntry[]>([]);
+  const [roadmapError, setRoadmapError] = useState<string | null>(null);
+  const [loadingRoadmap, setLoadingRoadmap] = useState(false);
 
-  // 6a data is only reachable through the roadmap call, so asking for the
-  // dependency panel is what triggers it. Kept as its own action rather than
+  // 6a/6b data is only reachable through the roadmap call, so asking for the
+  // roadmap panel is what triggers it. Kept as its own action rather than
   // fired on submit: it is a second AI call, and a judge watching the demo
   // should see that it costs one, not two, silently.
-  const loadDependencies = async (r: SubmitResult, recipe: RecipeId) => {
+  const loadRoadmap = async (r: SubmitResult, recipe: RecipeId) => {
     if (!r.repo || !r.files?.length) return;
-    setLoadingDeps(true);
-    setDepError(null);
+    setLoadingRoadmap(true);
+    setRoadmapError(null);
     try {
       const res: MigrationRoadmapResponse = await migrationRoadmap(
         recipe,
         r.files,
         r.repo.results
       );
-      setDeps(indexDependencies(res.roadmap));
-      setPanel('dependencies');
+      setRoadmap(res.roadmap);
+      setPanel('roadmap');
       setSelected(res.roadmap.length ? [...res.roadmap].sort((a, b) => a.priority - b.priority)[0].file : null);
     } catch (err) {
-      setDepError(err instanceof ApiError ? err.message : 'Could not build the dependency graph.');
+      setRoadmapError(err instanceof ApiError ? err.message : 'Could not build the migration roadmap.');
     } finally {
-      setLoadingDeps(false);
+      setLoadingRoadmap(false);
     }
   };
+
+  const sortedRoadmap = useMemo(
+    () => [...roadmap].sort((a, b) => a.priority - b.priority),
+    [roadmap]
+  );
+  const currentEntry = selected ? roadmap.find((e) => e.file === selected) ?? null : null;
 
   const items = result?.single ? [result.single] : result?.repo?.results ?? [];
   const failed = result?.repo?.failed ?? [];
@@ -66,9 +72,10 @@ export function App() {
             type="button"
             onClick={() => {
               setResult(null);
-              setDeps({});
+              setRoadmap([]);
               setSelected(null);
-              setDepError(null);
+              setRoadmapError(null);
+              setPanel('results');
             }}
             className="font-sans text-xs text-muted hover:text-ink"
           >
@@ -90,16 +97,16 @@ export function App() {
               </button>
               <button
                 type="button"
-                onClick={() => (Object.keys(deps).length ? setPanel('dependencies') : void loadDependencies(result, form.recipeId))}
-                disabled={loadingDeps}
+                onClick={() => (roadmap.length ? setPanel('roadmap') : void loadRoadmap(result, form.recipeId))}
+                disabled={loadingRoadmap}
                 className={`rounded px-2.5 py-1 font-sans text-xs disabled:opacity-50 ${
-                  panel === 'dependencies' ? 'bg-surface-raised text-ink' : 'text-muted hover:text-ink'
+                  panel === 'roadmap' ? 'bg-surface-raised text-ink' : 'text-muted hover:text-ink'
                 }`}
               >
-                {loadingDeps ? 'Building graph…' : 'Blast radius'}
+                {loadingRoadmap ? 'Building roadmap…' : 'Migration roadmap'}
               </button>
             </div>
-            {depError && <span className="font-mono text-[10px] text-danger">{depError}</span>}
+            {roadmapError && <span className="font-mono text-[10px] text-danger">{roadmapError}</span>}
           </div>
         )}
 
@@ -123,31 +130,17 @@ export function App() {
           </>
         ) : (
           <>
-            <div className="flex flex-wrap gap-1.5">
-              {Object.keys(deps).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setSelected(f)}
-                  className={`rounded border px-2 py-1 font-mono text-[10px] ${
-                    selected === f
-                      ? 'border-signal text-signal'
-                      : 'border-border text-muted hover:text-ink'
-                  }`}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+            <RoadmapView entries={sortedRoadmap} selectedFile={selected} onSelect={setSelected} />
             {current ? (
               <FileResultView
                 result={current}
-                dependsOn={deps[current.filename ?? '']?.dependsOn}
-                dependedOnBy={deps[current.filename ?? '']?.dependedOnBy}
+                dependsOn={currentEntry?.depends_on}
+                dependedOnBy={currentEntry?.depended_on_by}
+                riskCommentary={currentEntry?.risk_commentary}
                 onSelectFile={setSelected}
               />
             ) : (
-              <p className="text-xs text-faint">Pick a file to see its blast radius.</p>
+              <p className="text-xs text-faint">Pick a file above to see its blast radius.</p>
             )}
           </>
         )}
