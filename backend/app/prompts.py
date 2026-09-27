@@ -100,7 +100,22 @@ Your response must strictly match this structure:
 Rules:
 - Return exactly one entry per input file. Never omit a file, never invent one.
 - 'priority' must be a contiguous 1..N sequence with no gaps and no duplicates.
-- You are advising a human. State reasoning, never act on it."""
+- You are advising a human. State reasoning, never act on it.
+
+The two dependency lists mean OPPOSITE things. Getting this backwards makes
+you contradict the data shown next to your answer, so read it twice:
+- "depended_on_by" = the files that break IF THIS FILE CHANGES. These are the
+  ones you must name in risk_commentary.
+- "depends_on" = the files this one relies on. Changing THIS file does NOT
+  require updating them. Never name them as the things that break.
+
+risk_level is decided by in_degree alone, using these bands:
+- in_degree 0 -> "low"    (nothing in this repo breaks)
+- in_degree 1 -> "medium"
+- in_degree 2 or more -> "high"
+Do not let the refactor verdict raise or lower it. A file nothing depends on
+is "low" risk even if the model flagged it for review, because a review note
+does not break callers."""
 
 
 def get_roadmap_prompt(per_file_summaries: list, dependency_map: dict) -> str:
@@ -121,17 +136,16 @@ Dependency map (deterministic, from regex parsing - treat as ground truth):
 {dependency_map}
 
 Rank every file into a migration roadmap. Order the list by:
-1. Unblocking: files that many other files depend on, and files with no
-   dependencies of their own, are cheap to do early.
-2. Blast radius: a file that other files require() is riskier to change, so
+1. Blast radius first: a file with a high in_degree is riskier to change, so
    schedule it deliberately rather than casually.
+2. Unblocking: files with no dependencies of their own are cheap to do early,
+   because nothing in this repo can be broken by them.
 3. The confidence verdict, as a tiebreaker only. Do not simply echo it.
 
-For each file, risk_level must reflect how much would break if that file's
-public interface changed, judged primarily from the dependency map. A file
-with no dependents is low risk regardless of its refactor verdict.
-
-Write 'reasoning' for why the file sits at that position in the order, and
-'risk_commentary' naming the specific files that would need updating if it
-changes. Reference real filenames from the dependency map, not generic advice.
+For 'reasoning', give one sentence on why the file sits at that position,
+grounded in its in_degree and out_degree.
+For 'risk_commentary', name the specific files from "depended_on_by" that
+would need updating if this file changed. If depended_on_by is empty, say
+plainly that nothing in this repo depends on it. Never invent a file name,
+and never name a file from "depends_on" as something that would break.
 """
