@@ -5,6 +5,8 @@ import { RecipePicker } from './RecipePicker';
 import { SnippetEditor } from './SnippetEditor';
 import { RepoFilePanel } from './RepoFilePanel';
 import { SubmitBar } from './SubmitBar';
+import { Header } from '../layout/Header';
+import { Footer } from '../layout/Footer';
 
 interface InputScreenProps {
   form: MigrationForm;
@@ -26,47 +28,55 @@ export function InputScreen({ form }: InputScreenProps) {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-10">
-      <header className="flex flex-col gap-1">
-        <h1 className="font-sans text-xl font-semibold text-ink">Legacy Migrate</h1>
-        <p className="font-sans text-sm text-muted">
-          Paste one file, or bring a small repo and get a prioritized migration plan.
-        </p>
-      </header>
+    <div className="flex min-h-screen flex-col">
+      <Header />
 
-      <ModeToggle mode={form.mode} onChange={form.setMode} repoFileCount={form.files.length} />
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-10">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-sans text-xl font-semibold text-ink">
+            Get a migration plan, not a guess
+          </h1>
+          <p className="font-sans text-sm text-muted">
+            Paste one file, or bring a small repo and get a prioritized migration plan.
+          </p>
+        </div>
 
-      <RecipePicker recipes={form.recipes} value={form.recipeId} onChange={form.setRecipe} />
+        <ModeToggle mode={form.mode} onChange={form.setMode} repoFileCount={form.files.length} />
 
-      {form.mode === 'snippet' ? (
-        <SnippetEditor
-          recipe={form.recipe}
-          filename={form.snippetFilename}
-          code={form.snippetCode}
-          onFilenameChange={form.updateSnippetFilename}
-          onCodeChange={form.updateSnippetCode}
+        <RecipePicker recipes={form.recipes} value={form.recipeId} onChange={form.setRecipe} />
+
+        {form.mode === 'snippet' ? (
+          <SnippetEditor
+            recipe={form.recipe}
+            filename={form.snippetFilename}
+            code={form.snippetCode}
+            onFilenameChange={form.updateSnippetFilename}
+            onCodeChange={form.updateSnippetCode}
+          />
+        ) : (
+          <RepoFilePanel
+            recipe={form.recipe}
+            files={form.files}
+            fileIssues={form.fileIssues}
+            maxFiles={form.MAX_REPO_FILES}
+            onAddEmpty={form.addEmptyFile}
+            onAddFromFileList={form.addFromFileList}
+            onChange={form.updateFile}
+            onRemove={form.removeFile}
+          />
+        )}
+
+        <SubmitBar
+          blockingReason={form.blockingReason}
+          errorMessage={form.errorMessage}
+          isSubmitting={form.isSubmitting}
+          submitLabel={submitLabel}
+          onSubmit={form.submit}
+          onLoadExample={form.loadExample}
         />
-      ) : (
-        <RepoFilePanel
-          recipe={form.recipe}
-          files={form.files}
-          fileIssues={form.fileIssues}
-          maxFiles={form.MAX_REPO_FILES}
-          onAddEmpty={form.addEmptyFile}
-          onAddFromFileList={form.addFromFileList}
-          onChange={form.updateFile}
-          onRemove={form.removeFile}
-        />
-      )}
+      </main>
 
-      <SubmitBar
-        blockingReason={form.blockingReason}
-        errorMessage={form.errorMessage}
-        isSubmitting={form.isSubmitting}
-        submitLabel={submitLabel}
-        onSubmit={form.submit}
-        onLoadExample={form.loadExample}
-      />
+      <Footer />
     </div>
   );
 }

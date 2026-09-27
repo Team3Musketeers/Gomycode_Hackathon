@@ -8,6 +8,8 @@ import { InputScreen } from './components/input/InputScreen';
 import { FileResultView } from './components/FileResultView';
 import { RepoOverview } from './components/RepoOverview';
 import { MigrationRoadmap } from './components/MigrationRoadmap';
+import { Header } from './components/layout/Header';
+import { Footer } from './components/layout/Footer';
 
 import {
   migrationRoadmap,
@@ -144,24 +146,25 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-bg text-ink antialiased">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-10">
-        <div className="flex items-center justify-between">
-          <h2 className="font-sans text-lg font-semibold text-ink">
-            {result.mode === 'repo'
-              ? 'Repository results'
-              : 'Snippet result'}
-          </h2>
-
+    <div className="flex min-h-screen w-full flex-col bg-bg text-ink antialiased">
+      <Header
+        subtitle={
+          result.mode === 'repo'
+            ? 'Repository results'
+            : 'Snippet result'
+        }
+        action={
           <button
             type="button"
             onClick={reset}
-            className="font-sans text-xs text-muted hover:text-ink"
+            className="rounded border border-border px-3 py-1.5 font-sans text-xs text-muted hover:border-signal/40 hover:text-ink"
           >
             &larr; Back to input
           </button>
-        </div>
+        }
+      />
 
+      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 px-4 py-10">
         {result.mode === 'repo' && (
           <>
             <div className="flex flex-wrap items-center gap-3">
@@ -310,7 +313,9 @@ export function App() {
             ))}
           </>
         )}
-      </div>
+      </main>
+
+      <Footer />
     </div>
   );
 }
