@@ -15,7 +15,7 @@ import time
 import requests
 from dotenv import load_dotenv
 
-from .prompts import build_prompt
+from .prompts import SYSTEM_PROMPT, get_refactor_prompt
 
 load_dotenv()
 
@@ -48,7 +48,7 @@ def _strip_code_fences(text: str) -> str:
     return text.strip()
 
 
-def _call_openrouter(prompt: str) -> str:
+def _call_openrouter(system_prompt: str, user_prompt: str) -> str:
     if not OPENROUTER_API_KEY:
         raise LLMParseError(
             "OPENROUTER_API_KEY not set — copy .env.example to .env and add your key"
@@ -59,7 +59,10 @@ def _call_openrouter(prompt: str) -> str:
     }
     payload = {
         "model": MODEL,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
         "temperature": 0.2,
     }
     resp = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=60)
@@ -84,18 +87,28 @@ def _validate_keys(data: dict) -> None:
 
 
 def call_llm_for_refactor(code: str, recipe: str, max_retries: int = 2) -> dict:
-    prompt = build_prompt(code, recipe)
+    user_prompt = get_refactor_prompt(code, recipe)
     last_err = None
 
     for attempt in range(max_retries + 1):
         try:
-            raw = _call_openrouter(prompt)
+            raw = _call_openrouter(SYSTEM_PROMPT, user_prompt)
             parsed = json.loads(_strip_code_fences(raw))
             _validate_keys(parsed)
             return parsed
         except (json.JSONDecodeError, KeyError) as e:
             last_err = e
             time.sleep(0.5)
+        except RateLimitError as e:
+            # Don't hammer a rate-limited endpoint with quick retries — that
+            # just burns more of the quota. Back off harder, then give up
+            # and surface this distinctly so the caller can tell "rate
+            # limited" apart from "model returned garbage".
+            last_err = e
+            if attempt < max_retries:
+                time.sleep(5)
+            else:
+                raise
         except requests.RequestException as e:
             last_err = e
             time.sleep(1)
