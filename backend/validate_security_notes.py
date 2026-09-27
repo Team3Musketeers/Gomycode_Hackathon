@@ -1,7 +1,12 @@
 from pathlib import Path
+import argparse
 import requests
 
-API_URL = "http://127.0.0.1:8001/refactor"
+# Default matches the port test_security_notes.py and the README use
+# (`uvicorn app.main:app --reload --port 8000`). The port used to be pinned
+# to 8001 here, so this script always got connection-refused against a
+# default server and reported every sample as a failure.
+DEFAULT_BASE_URL = "http://localhost:8000"
 
 SAMPLES_DIR = Path(__file__).parent.parent / "samples" / "py2to3"
 
@@ -10,7 +15,7 @@ EXPECTED_SECURITY_SIGNALS = {
 }
 
 
-def validate_sample(path: Path) -> bool:
+def validate_sample(path: Path, api_url: str) -> bool:
     code = path.read_text(encoding="utf-8")
 
     payload = {
@@ -20,7 +25,7 @@ def validate_sample(path: Path) -> bool:
     }
 
     try:
-        response = requests.post(API_URL, json=payload, timeout=90)
+        response = requests.post(api_url, json=payload, timeout=90)
     except requests.RequestException as exc:
         print(f"[FAIL] {path.name} -> API error: {exc}")
         return False
@@ -64,6 +69,15 @@ def validate_sample(path: Path) -> bool:
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--base-url",
+        default=DEFAULT_BASE_URL,
+        help="Backend base URL, without the /refactor suffix.",
+    )
+    args = parser.parse_args()
+    api_url = f"{args.base_url.rstrip('/')}/refactor"
+
     files = sorted(SAMPLES_DIR.glob("*.py"))
 
     if not files:
@@ -73,10 +87,11 @@ def main():
     passed = 0
     blocked = 0
 
+    print(f"Hitting {api_url} for {len(files)} samples...\n")
     print("=== Layer 3 Security Notes Validation ===\n")
 
     for file in files:
-        result = validate_sample(file)
+        result = validate_sample(file, api_url)
 
         if result is True:
             passed += 1

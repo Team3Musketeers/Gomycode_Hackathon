@@ -27,7 +27,7 @@ Your response must strictly match this structure:
     "refactored_code": "string (the complete updated file content)",
     "explanation": "string (plain-language reasoning for the major changes made)",
     "tests": "string (executable unit test code for the refactored code, no prose, no Markdown)",
-    "security_notes": "string (brief security commentary, e.g., 'no issues found' or noting specific risks mitigated)",
+    "security_notes": "string (security risks that REMAIN in the refactored code, or the exact string 'no issues found' only if you checked every pattern below and none is present)",
     "confidence": "string ('safe_to_merge' OR 'needs_human_review')"
 }"""
 
@@ -46,8 +46,41 @@ Ensure your JSON output includes:
 1. The fully refactored code.
 2. A clear explanation of *why* you made these specific changes.
 3. Executable unit tests for the refactored code. See the test rules below.
-4. Security implications (if any).
+4. Security notes. See the security rules below - this is not optional and not
+   a formality.
 5. 'safe_to_merge' if it's a straightforward mechanical change, or 'needs_human_review' if it involves complex logical changes.
+
+The "security_notes" value reports what is STILL RISKY IN THE CODE YOU ARE
+RETURNING. A migration recipe usually rewrites syntax, not trust boundaries, so
+swapping a deprecated call for its modern equivalent mitigates very little. Going
+from `urllib2.urlopen(url)` to `urllib.request.urlopen(url)` is a syntax change;
+it is still an outbound request to an attacker-controllable URL, and saying
+"no issues found" about that is wrong. Do not describe a risk as resolved
+merely because the API name changed. Every rule below is mandatory:
+- Work through this list against the refactored code, not against the original:
+  - a URL, path or host taken from a parameter or request and passed to a
+    network call (urlopen, requests.*, httpx, fetch, axios) - server-side
+    request forgery; check for any allowlist or scheme validation before saying
+    it is handled
+  - eval, exec, pickle.loads, or yaml.load on untrusted input
+  - SQL, shell or LDAP queries assembled by string concatenation, %-formatting
+    or f-strings instead of parameter binding
+  - credentials, API keys, tokens or private URLs hardcoded in the source
+  - shell=True, os.system, subprocess with a shell string
+  - file paths built from user input without normalisation (path traversal)
+  - disabled TLS verification, or secrets written to logs
+- If any pattern is present, name that pattern and say what an attacker could
+  do with it. Be specific: "eval() on request data allows arbitrary code
+  execution", not "some security concerns may remain".
+- Describe the finding in your own words, referring to the actual identifiers
+  in this file. Do not restate the wording of this instruction - a note that
+  echoes the checklist back verbatim is not an analysis, and it is obvious to
+  anyone reading it.
+- Write "no issues found" ONLY when you have actually checked each pattern
+  above against the returned code and found none. That sentence is a claim that
+  you looked; do not use it as a default.
+- Report residual risk even when the recipe is purely mechanical. Syntax
+  migration does not remove it.
 
 The "tests" value MUST be real, runnable test code - never prose. It will be
 executed against a copy of the refactored code, so anything that does not
