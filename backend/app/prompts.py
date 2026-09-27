@@ -1,17 +1,16 @@
 # backend/app/prompts.py
 """Prompt library for Legacy Migrate.
 
-Two distinct AI jobs, deliberately kept as separate prompts:
+Job 1 (get_refactor_prompt) - per-file mechanical transformation. That is this
+module's whole job: the per-recipe prompt text for the first AI call.
 
-  Job 1 (get_refactor_prompt)  - per-file mechanical transformation.
-  Job 2 (get_roadmap_prompt)   - portfolio-level prioritisation, which also
-                                 receives the deterministic dependency map
-                                 built by the regex pass so the LLM reasons
-                                 over real in-degree/out-degree data instead of
-                                 guessing. See Section 2 of the plan.
+Job 2 (the Migration Roadmap) lives in roadmap.py, per the agreed structure.
+get_roadmap_prompt and ROADMAP_SYSTEM_PROMPT are re-exported lazily from here
+so existing imports of them keep working; see the note at the bottom.
 
-The dependency graph itself is NOT produced here. It is plain regex parsing
-and must stay that way - it is the provable, checkable half of the product.
+The dependency graph itself is NOT produced by either job. It is plain regex
+parsing in dependency_graph.py and must stay that way - it is the provable,
+checkable half of the product.
 """
 
 # Recipe identifiers. Kept in sync with the samples/ directory names so the
@@ -75,77 +74,21 @@ Code to refactor:
 """
 
 
-# --- Job 2: portfolio-level prioritisation -------------------------------
+# --- Job 2 lives in roadmap.py -------------------------------------------
 #
-# Same JSON discipline as Job 1, because the free-tier models we use on
-# OpenRouter are far less reliable at "output only JSON" than Claude is. The
-# schema is deliberately flat and pre-ordered so a sloppy response still
-# degrades into a usable ranking rather than an unparseable blob.
-
-ROADMAP_SYSTEM_PROMPT = """You are an expert AI migration strategist. You plan the order in which a small legacy repository should be migrated.
-You MUST output ONLY valid JSON. Do not include markdown blocks like ```json.
-Your response must strictly match this structure:
-{
-    "roadmap": [
-        {
-            "file": "string (filename, exactly as given in the input)",
-            "priority": "integer (1 = migrate first)",
-            "risk_level": "string ('low' OR 'medium' OR 'high')",
-            "reasoning": "string (one sentence on why this file sits here in the order)",
-            "risk_commentary": "string (one sentence: what specifically breaks if this file is changed)"
-        }
-    ]
-}
-
-Rules:
-- Return exactly one entry per input file. Never omit a file, never invent one.
-- 'priority' must be a contiguous 1..N sequence with no gaps and no duplicates.
-- You are advising a human. State reasoning, never act on it.
-
-The two dependency lists mean OPPOSITE things. Getting this backwards makes
-you contradict the data shown next to your answer, so read it twice:
-- "depended_on_by" = the files that break IF THIS FILE CHANGES. These are the
-  ones you must name in risk_commentary.
-- "depends_on" = the files this one relies on. Changing THIS file does NOT
-  require updating them. Never name them as the things that break.
-
-risk_level is decided by in_degree alone, using these bands:
-- in_degree 0 -> "low"    (nothing in this repo breaks)
-- in_degree 1 -> "medium"
-- in_degree 2 or more -> "high"
-Do not let the refactor verdict raise or lower it. A file nothing depends on
-is "low" risk even if the model flagged it for review, because a review note
-does not break callers."""
+# Layer 6b (the Migration Roadmap) started life here, then moved to its own
+# module to match the agreed structure: prompts.py is the per-recipe prompt
+# text for Job 1, roadmap.py is Job 2's prompt plus its calling and validation
+# logic. The two re-exports below keep any existing
+# `from .prompts import get_roadmap_prompt` working, so moving the code broke
+# nothing.
+#
+# The indirection is lazy on purpose: roadmap.py imports llm_client, which
+# imports prompts.py. A module-level import here would be circular.
 
 
-def get_roadmap_prompt(per_file_summaries: list, dependency_map: dict) -> str:
-    """Build the Job 2 prompt.
-
-    per_file_summaries: list of {"file", "confidence", "security_notes"} dicts
-                         from the per-file refactor pass.
-    dependency_map:     {"file": {"depends_on": [...], "depended_on_by": [...]}}
-                        produced by the deterministic regex pass. This is real
-                        parsed data, not model output - lean on it.
-    """
-    return f"""Below is a small legacy repository. For each file you are given the AI refactor verdict, plus a dependency map computed by static parsing of require()/import statements.
-
-Per-file refactor verdicts:
-{per_file_summaries}
-
-Dependency map (deterministic, from regex parsing - treat as ground truth):
-{dependency_map}
-
-Rank every file into a migration roadmap. Order the list by:
-1. Blast radius first: a file with a high in_degree is riskier to change, so
-   schedule it deliberately rather than casually.
-2. Unblocking: files with no dependencies of their own are cheap to do early,
-   because nothing in this repo can be broken by them.
-3. The confidence verdict, as a tiebreaker only. Do not simply echo it.
-
-For 'reasoning', give one sentence on why the file sits at that position,
-grounded in its in_degree and out_degree.
-For 'risk_commentary', name the specific files from "depended_on_by" that
-would need updating if this file changed. If depended_on_by is empty, say
-plainly that nothing in this repo depends on it. Never invent a file name,
-and never name a file from "depends_on" as something that would break.
-"""
+def __getattr__(name):
+    if name in ("ROADMAP_SYSTEM_PROMPT", "get_roadmap_prompt"):
+        from . import roadmap
+        return getattr(roadmap, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
