@@ -1,12 +1,6 @@
-// validator.js - validates a todo item before saving
-function validateTodo(todo, callback) {
-  if (!todo.title) {
-    return callback(new Error("todo must have a title"));
-  }
-  if (todo.title.length > 200) {
-    return callback(new Error("title too long"));
-  }
-  callback(null, todo);
-}
-
-module.exports = { validateTodo: validateTodo };
+// validator.js - pure validation, no internal dependencies.
+// Dependency profile: in-degree 1 (storage.js), out-degree 0.
+// This is the demo's "safe, easy win": nothing else has to change to migrate it.
+module.exports = {
+    isValid: function(data) { return !!data; }
+};
