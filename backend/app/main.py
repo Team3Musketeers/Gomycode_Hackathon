@@ -12,6 +12,7 @@ from .models import (
 )
 from .llm_client import call_llm_for_refactor, LLMParseError, RateLimitError
 from .dry_run import run_python_tests_dry_run
+from .confidence import derive_confidence
 
 app = FastAPI(title="Legacy Migrate API")
 
@@ -45,9 +46,11 @@ def _run_refactor(code: str, recipe: str, filename: Optional[str]) -> RefactorRe
             "output": "Dry-run execution not implemented for this recipe yet.",
         }
 
-    # Layer 4 will replace this stub rule with the real confidence logic.
-    confidence = "needs_human_review"
-    confidence_reason = "Confidence rule not yet implemented (Layer 4)."
+    # Layer 4: independently derived, not a blind pass-through of the
+    # model's own self-reported confidence. See confidence.py for why.
+    confidence, confidence_reason = derive_confidence(
+        result.get("confidence"), dry_run_result
+    )
 
     return RefactorResponse(
         filename=filename,

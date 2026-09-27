@@ -58,7 +58,7 @@ def main():
             resp = requests.post(
                 f"{args.base_url}/refactor",
                 json={"code": code, "recipe": recipe, "filename": filename},
-                timeout=90,
+                timeout=150,
             )
         except requests.RequestException as e:
             print(f"[ERROR] {filename}: request failed - {e}")
