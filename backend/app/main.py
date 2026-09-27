@@ -9,10 +9,13 @@ from .models import (
     RefactorRepoRequest,
     RefactorRepoResponse,
     DryRunResult,
+    MigrationRoadmapRequest,
+    MigrationRoadmapResponse,
 )
 from .llm_client import call_llm_for_refactor, LLMParseError, RateLimitError
 from .dry_run import run_python_tests_dry_run
 from .confidence import derive_confidence
+from .roadmap import build_migration_roadmap
 
 app = FastAPI(title="Legacy Migrate API")
 
@@ -102,3 +105,25 @@ def refactor_repo(req: RefactorRepoRequest):
             failed.append({"filename": f.filename, "error": str(e)})
 
     return RefactorRepoResponse(results=results, failed=failed)
+
+
+@app.post("/migration-roadmap", response_model=MigrationRoadmapResponse)
+def migration_roadmap(req: MigrationRoadmapRequest):
+    """Job 2 (Section 5): takes /refactor-repo's own per-file results plus
+    the original files (rebuilt into a Layer 6a dependency map here, not
+    trusted from the client) and returns a ranked, dependency-grounded plan.
+    No new data path for Blast Radius (Section 4) — the frontend gets
+    depends_on/depended_on_by/in_degree/out_degree on every entry already."""
+    if len(req.files) != len(req.results):
+        raise HTTPException(
+            status_code=400,
+            detail="files and results must correspond 1:1 (same repo, same call)",
+        )
+    try:
+        roadmap = build_migration_roadmap(req.results, req.files)
+    except RateLimitError as e:
+        raise HTTPException(status_code=503, detail=f"Rate limited: {e}")
+    except LLMParseError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    return MigrationRoadmapResponse(roadmap=roadmap)

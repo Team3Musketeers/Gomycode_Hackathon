@@ -42,3 +42,28 @@ class RefactorRepoRequest(BaseModel):
 class RefactorRepoResponse(BaseModel):
     results: list[RefactorResponse]
     failed: list[dict] = Field(default_factory=list)  # [{filename, error}]
+
+
+RiskLevel = Literal["low", "medium", "high"]
+
+
+class RoadmapEntry(BaseModel):
+    file: str
+    priority: int
+    risk_level: RiskLevel
+    reasoning: str            # why this file sits at this position in the order (Job 2, LLM)
+    risk_commentary: str      # what breaks if this file changes (Job 2, LLM, grounded in the map below)
+    depends_on: list[str] = Field(default_factory=list)        # Layer 6a, deterministic
+    depended_on_by: list[str] = Field(default_factory=list)    # Layer 6a, deterministic
+    in_degree: int = 0   # == len(depended_on_by); how many files break if this one changes
+    out_degree: int = 0  # == len(depends_on); how many other files this one relies on
+
+
+class MigrationRoadmapRequest(BaseModel):
+    recipe: Recipe
+    files: list[RepoFile]              # same files sent to /refactor-repo — rebuilds the Layer 6a map here
+    results: list[RefactorResponse]    # /refactor-repo's own output, reused rather than recomputed
+
+
+class MigrationRoadmapResponse(BaseModel):
+    roadmap: list[RoadmapEntry]
