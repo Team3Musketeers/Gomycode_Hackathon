@@ -19,6 +19,13 @@ export interface SubmitResult {
   mode: Mode;
   single?: RefactorResponse;
   repo?: RefactorRepoResponse;
+  /**
+   * The exact files that were sent, kept so the results screen can show each
+   * file's Layer 6a dependencies. Not a copy of the drafts: it is the payload
+   * the backend actually received, so what the panel shows about file X is
+   * about the same bytes the backend parsed.
+   */
+  files?: { filename: string; code: string }[];
 }
 
 interface UseMigrationFormOptions {
@@ -180,12 +187,10 @@ export function useMigrationForm(options: UseMigrationFormOptions = {}) {
         setPhase('done');
         options.onSubmitted?.({ mode, single: result });
       } else {
-        const result = await refactorRepo(
-          recipeId,
-          files.map((f) => ({ filename: f.filename.trim(), code: f.code }))
-        );
+        const payload = files.map((f) => ({ filename: f.filename.trim(), code: f.code }));
+        const result = await refactorRepo(recipeId, payload);
         setPhase('done');
-        options.onSubmitted?.({ mode, repo: result });
+        options.onSubmitted?.({ mode, repo: result, files: payload });
       }
     } catch (err) {
       setPhase('error');

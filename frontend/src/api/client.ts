@@ -1,4 +1,6 @@
 import type {
+  MigrationRoadmapRequest,
+  MigrationRoadmapResponse,
   RecipeId,
   RefactorRepoRequest,
   RefactorRepoResponse,
@@ -62,4 +64,27 @@ export function refactorRepo(
 ): Promise<RefactorRepoResponse> {
   const payload: RefactorRepoRequest = { recipe, files };
   return post<RefactorRepoRequest, RefactorRepoResponse>('/refactor-repo', payload);
+}
+
+/**
+ * Layer 6b. Takes /refactor-repo's own per-file results plus the original
+ * files, and returns a ranked plan.
+ *
+ * The `files` are sent again on purpose even though the client already has
+ * them: the backend rebuilds the Layer 6a dependency graph from that source
+ * code on every call rather than trusting a map from the client, so nobody
+ * can hand the UI a fabricated set of dependencies.
+ *
+ * Ranking a repo needs at least two files, and the backend requires
+ * `files` and `results` to correspond 1:1 — it answers 400 otherwise. So
+ * pass exactly the results that came back from /refactor-repo for exactly
+ * the files you are sending.
+ */
+export function migrationRoadmap(
+  recipe: RecipeId,
+  files: { filename: string; code: string }[],
+  results: RefactorResponse[]
+): Promise<MigrationRoadmapResponse> {
+  const payload: MigrationRoadmapRequest = { recipe, files, results };
+  return post<MigrationRoadmapRequest, MigrationRoadmapResponse>('/migration-roadmap', payload);
 }

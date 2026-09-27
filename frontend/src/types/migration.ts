@@ -5,6 +5,7 @@
 export type RecipeId = 'python2to3' | 'js_callback_to_async';
 export type Mode = 'snippet' | 'repo';
 export type Confidence = 'safe_to_merge' | 'needs_human_review';
+export type RiskLevel = 'low' | 'medium' | 'high';
 
 export interface Recipe {
   id: RecipeId;
@@ -58,6 +59,38 @@ export interface RefactorResponse {
 export interface RefactorRepoResponse {
   results: RefactorResponse[];
   failed: { filename: string; error: string }[];
+}
+
+// --- Layer 6b: the Migration Roadmap ---
+
+/**
+ * One ranked file. The last four fields are NOT the model's opinion: the
+ * backend copies them straight out of the deterministic Layer 6a graph, so
+ * the roadmap screen and the per-file dependency panel can never disagree.
+ * Only priority, risk_level, reasoning and risk_commentary come from the LLM.
+ */
+export interface RoadmapEntry {
+  file: string;
+  priority: number;
+  risk_level: RiskLevel;
+  reasoning: string;
+  risk_commentary: string;
+  depends_on: string[];
+  depended_on_by: string[];
+  in_degree: number;
+  out_degree: number;
+}
+
+export interface MigrationRoadmapRequest {
+  recipe: RecipeId;
+  /** The same files sent to /refactor-repo — the backend rebuilds the 6a graph from these. */
+  files: { filename: string; code: string }[];
+  /** /refactor-repo's own output, so the per-file verdicts are not recomputed. */
+  results: RefactorResponse[];
+}
+
+export interface MigrationRoadmapResponse {
+  roadmap: RoadmapEntry[];
 }
 
 export type RunPhase = 'idle' | 'submitting' | 'error' | 'done';
