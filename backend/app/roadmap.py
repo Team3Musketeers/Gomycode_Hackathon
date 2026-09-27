@@ -27,6 +27,7 @@ import json
 import time
 from typing import Dict, List, Optional
 
+from .dependency_graph import build_dependency_map
 from .llm_client import (
     LLMParseError,
     RateLimitError,
@@ -236,3 +237,23 @@ def call_roadmap(
 
     roadmap.sort(key=lambda r: (r["priority"] is None, r["priority"]))
     return {"roadmap": roadmap, "dependency_map": dependency_map}
+
+
+def build_migration_roadmap(refactor_results, files) -> List[dict]:
+    """Entry point used by POST /migration-roadmap in main.py.
+
+    Wires the two AI jobs together and returns just the ranked list, ready to
+    drop into MigrationRoadmapResponse. It takes the *original* files rather
+    than a dependency map from the client, on purpose: the Layer 6a graph is
+    rebuilt server-side from source code every time, so a client cannot post a
+    hand-crafted map and talk the UI into showing fabricated dependencies.
+
+    refactor_results: /refactor-repo's own output (RefactorResponse list), so
+                      the per-file verdicts are reused rather than recomputed
+                      and we don't spend a second batch of API calls.
+    files:            the same files that were sent to /refactor-repo.
+    """
+    dependency_map = build_dependency_map(files or [])
+    summaries = build_summaries(refactor_results)
+    return call_roadmap(summaries, dependency_map)["roadmap"]
+
