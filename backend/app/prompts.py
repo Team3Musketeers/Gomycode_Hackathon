@@ -27,7 +27,7 @@ Your response must strictly match this structure:
 {
     "refactored_code": "string (the complete updated file content)",
     "explanation": "string (plain-language reasoning for the major changes made)",
-    "tests": "string (dry-run unit tests for the refactored code)",
+    "tests": "string (executable unit test code for the refactored code, no prose, no Markdown)",
     "security_notes": "string (brief security commentary, e.g., 'no issues found' or noting specific risks mitigated)",
     "confidence": "string ('safe_to_merge' OR 'needs_human_review')"
 }"""
@@ -46,9 +46,28 @@ def get_refactor_prompt(file_content: str, recipe: str) -> str:
 Ensure your JSON output includes:
 1. The fully refactored code.
 2. A clear explanation of *why* you made these specific changes.
-3. Relevant unit tests (dry-run).
+3. Executable unit tests for the refactored code. See the test rules below.
 4. Security implications (if any).
 5. 'safe_to_merge' if it's a straightforward mechanical change, or 'needs_human_review' if it involves complex logical changes.
+
+The "tests" value MUST be real, runnable test code - never prose. It will be
+executed against a copy of the refactored code, so anything that does not
+actually run is worse than useless. Every one of these rules is mandatory:
+- Include every import the test code needs. If the test uses any module
+  (for example `sys`, `os`, `json`, `unittest`, or the module under test),
+  import it explicitly at the top. Never rely on a name being pre-imported.
+- Include at least one real assertion per behaviour under test. An assertion
+  must actually be capable of failing on a wrong result.
+- Test only functions and attributes that exist in the refactored code above.
+  Do not invent, guess at, or call a function that is not defined there. If a
+  function is not reachable for testing, test the observable behaviour instead
+  and say nothing rather than calling something undefined.
+- Output raw source code only. No Markdown, no ``` fences, no surrounding
+  quotes, no commentary, no headings, no "Here are the tests:" preamble.
+- Emit real newlines. Never write an escaped backslash-n pair as a stand-in for
+  a line break; that is a syntax error once the value is parsed out of JSON.
+- The code must be syntactically valid for its language and must run top to
+  bottom without raising NameError, SyntaxError, or ImportError.
 
 
 Code to refactor:
