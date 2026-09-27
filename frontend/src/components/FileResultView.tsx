@@ -15,6 +15,8 @@ export interface DependencyPanelProps {
   filename?: string | null;
   dependsOn?: string[];
   dependedOnBy?: string[];
+  /** Layer 6b's one-sentence AI risk note for this file — not from Layer 6a. */
+  riskCommentary?: string;
   onSelectFile?: (filename: string) => void;
 }
 
@@ -59,6 +61,7 @@ export function DependencyPanel({
   filename,
   dependsOn = [],
   dependedOnBy = [],
+  riskCommentary,
   onSelectFile,
 }: DependencyPanelProps) {
   const inDegree = dependedOnBy.length;
@@ -83,6 +86,13 @@ export function DependencyPanel({
           <span className="ml-1.5 text-[10px] text-muted">depends on</span>
         </div>
       </div>
+
+      {riskCommentary && (
+        <p className="mb-3 rounded border border-signal/30 bg-signal/10 px-3 py-2 text-xs text-ink">
+          <span className="mr-1.5 font-mono text-[10px] uppercase text-signal">AI risk note</span>
+          {riskCommentary}
+        </p>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
@@ -117,6 +127,7 @@ export interface FileResultViewProps {
    */
   dependsOn?: string[];
   dependedOnBy?: string[];
+  riskCommentary?: string;
   onBack?: () => void;
   onSelectFile?: (filename: string) => void;
 }
@@ -141,6 +152,7 @@ export function FileResultView({
   result,
   dependsOn,
   dependedOnBy,
+  riskCommentary,
   onBack,
   onSelectFile,
 }: FileResultViewProps) {
@@ -193,6 +205,7 @@ export function FileResultView({
             filename={result.filename}
             dependsOn={dependsOn}
             dependedOnBy={dependedOnBy}
+            riskCommentary={riskCommentary}
             onSelectFile={onSelectFile}
           />
         )}
