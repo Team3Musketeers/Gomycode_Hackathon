@@ -8,8 +8,10 @@ from .models import (
     RefactorResponse,
     RefactorRepoRequest,
     RefactorRepoResponse,
+    DryRunResult,
 )
 from .llm_client import call_llm_for_refactor, LLMParseError, RateLimitError
+from .dry_run import run_python_tests_dry_run
 
 app = FastAPI(title="Legacy Migrate API")
 
@@ -32,6 +34,17 @@ def _run_refactor(code: str, recipe: str, filename: Optional[str]) -> RefactorRe
     can never drift apart in behavior."""
     result = call_llm_for_refactor(code, recipe)
 
+    # Dry-run execution: python2to3 only for now. js_callback_async tests
+    # would need a Node sandbox — stated limitation, not implemented yet.
+    if recipe == "python2to3":
+        dry_run_result = run_python_tests_dry_run(result["tests"])
+    else:
+        dry_run_result = {
+            "attempted": False,
+            "passed": None,
+            "output": "Dry-run execution not implemented for this recipe yet.",
+        }
+
     # Layer 4 will replace this stub rule with the real confidence logic.
     confidence = "needs_human_review"
     confidence_reason = "Confidence rule not yet implemented (Layer 4)."
@@ -42,6 +55,7 @@ def _run_refactor(code: str, recipe: str, filename: Optional[str]) -> RefactorRe
         refactored_code=result["refactored_code"],
         explanation=result["explanation"],
         tests=result["tests"],
+        dry_run=DryRunResult(**dry_run_result),
         security_notes=result["security_notes"],
         confidence=confidence,
         confidence_reason=confidence_reason,
